@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  data-downloader:
+      build: .
+      command: >
+        bash -c "
+          set -e; 
+          if [ ! -f /data/raw/olist_orders_dataset.csv ]; then
+            echo 'Olist dataset not found. Downloading from Kaggle...' &&
+            kaggle datasets download -d olistbr/brazilian-ecommerce -p /data/raw --unzip &&
+            echo 'Download and extraction complete.';
+          else
+            echo 'Olist dataset already exists. Skipping download.';
+          fi
+        "
+      volumes:
+        - ./data:/data
+        - ./.kaggle:/root/.kaggle
+
+  spark-master:
+    build: 
+      context: .
+      dockerfile: spark/Dockerfile
+    # image: apache/spark:3.5.1
+    container_name: spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./spark_jobs:/opt/bitnami/spark/jobs
+      - ./data:/opt/bitnami/spark/data
+    depends_on:
+      data-downloader:
+        condition: service_completed_successfully
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: spark/Dockerfile
+    #image: apache/spark:3.5.1
+    container_name: spark-worker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    volumes:
+      - ./spark_jobs:/opt/bitnami/spark/jobs
+      - ./data:/opt/bitnami/spark/data
+    depends_on:
+      data-downloader:
+        condition: service_completed_successfully
+      spark-master:
+        condition: service_started
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    volumes:
+      - ./data:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    depends_on:
+      data-downloader:
+        condition: service_completed_successfully
+
+  postgres:
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: project_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d project_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  prefect-server:
+    build: ./prefect
+    command: >
+      bash -c "
+        prefect server start --host 0.0.0.0 &
+        prefect deployment build /opt/prefect/flows/etl_flow.py:big_data_etl_flow -n 'Big Data ETL' --apply
+        prefect agent start -q 'default'
+      "
+    ports:
+      - "9090:4200"
+    volumes:
+      - ./flows:/opt/prefect/flows
+      - ./data:/data
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: "postgresql+asyncpg://user:password@postgres:5432/project_db"
+    depends_on:
+      data-downloader:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy # <-- Ждем, пока БД будет "здорова"
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres # <-- Добавлена простая зависимость, чтобы Grafana стартовала после БД

@@ -1,0 +1,5 @@
+prefect
+minio
+pyspark
+asyncpg
+psycopg2-binary

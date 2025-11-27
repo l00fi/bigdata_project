@@ -1,0 +1,4 @@
+prefect
+minio
+kaggle
+unzip
