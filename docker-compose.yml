@@ -3,7 +3,9 @@ version: '3.8'
 networks:
   bigdata:
     driver: bridge
+
 services:
+  # Контейнер отвечает за загрузку данных с kaggle
   data-downloader:
     build: .
     command: >
@@ -22,13 +24,12 @@ services:
       - ./.kaggle:/root/.kaggle
     networks:
       - bigdata
-
+  # Контейнер отвечает за распределнную оюраотку данных и загрузку в БД
   spark-master:
     build: 
       context: .
       dockerfile: spark/Dockerfile
     container_name: spark-master
-    # command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     command: >
       /opt/spark/bin/spark-class
       -Dspark.master.rest.enabled=true
@@ -51,7 +52,7 @@ services:
       SPARK_MASTER_REST_PORT: 6066
     networks:
       - bigdata
-
+  # Контейнер-ассистент для spark-master
   spark-worker:
     build:
       context: .
@@ -59,8 +60,8 @@ services:
     container_name: spark-worker
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     volumes:
-      - ./spark_jobs:/opt/bitnami/spark/jobs
-      - ./data:/opt/bitnami/spark/data
+      - ./spark_jobs:/opt/spark/jobs
+      - ./data:/opt/spark/data
     depends_on:
       data-downloader:
         condition: service_completed_successfully
@@ -68,14 +69,12 @@ services:
         condition: service_started
     networks:
       - bigdata
-
+  # Контейнер Data-lake, в котором хранятся сырые данные
   minio:
     image: minio/minio
     ports:
       - "9001:9001"
       - "9000:9000"
-    # volumes:
-    #   - ./data:/data
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -85,7 +84,7 @@ services:
         condition: service_completed_successfully
     networks:
       - bigdata
-
+  # Котейнер БД, в который загружаются обработанные данные
   postgres:
     image: postgres:13
     ports:
@@ -101,7 +100,7 @@ services:
       retries: 5
     networks:
       - bigdata
-
+  # Контейнер для миграций
   prefect-migrate:
     build:
       context: ./prefect
@@ -124,7 +123,7 @@ services:
         condition: service_healthy
     networks:
       - bigdata
-
+  # Контейнер prefect, который руководит всеми процессами - от загрузки данных в minio до загрузки обработанных данных в postgres
   prefect-server:
     build:
       context: ./prefect
@@ -141,7 +140,7 @@ services:
         condition: service_completed_successfully
     networks:
       - bigdata
-
+  # Контейнер-ассистент для prefect, аналогичен spark
   prefect-worker:
     build:
       context: ./prefect
@@ -159,7 +158,7 @@ services:
         condition: service_started
     networks:
       - bigdata
-
+  # Контейнер дашборда для визуализации и аналитики
   grafana:
     image: grafana/grafana-oss:latest
     ports:
