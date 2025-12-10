@@ -56,7 +56,6 @@ services:
     build:
       context: .
       dockerfile: spark/Dockerfile
-    #image: apache/spark:3.5.1
     container_name: spark-worker
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     volumes:
@@ -75,8 +74,8 @@ services:
     ports:
       - "9001:9001"
       - "9000:9000"
-    volumes:
-      - ./data:/data
+    # volumes:
+    #   - ./data:/data
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -130,7 +129,6 @@ services:
     build:
       context: ./prefect
       dockerfile: Dockerfile
-    # Команда теперь находится в entrypoint.sh
     command: prefect server start --host 0.0.0.0
     restart: unless-stopped
     ports:
@@ -167,6 +165,6 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - postgres # <-- Добавлена простая зависимость, чтобы Grafana стартовала после БД
+      - postgres
     networks:
       - bigdata

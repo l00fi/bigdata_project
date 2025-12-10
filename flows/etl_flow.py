@@ -59,8 +59,7 @@ def run_spark_job():
     print("STDOUT:", result.stdout)
     print("STDERR:", result.stderr)
 
-    # return result.check_returncode() == 0
-    return 0
+    return result.check_returncode() == 0
 
 # Spark сам загрузит данные в PostgreSQL. Эта задача просто для логической структуры.
 @task(name="Confirm Load")
@@ -76,9 +75,9 @@ def big_data_etl_flow():
     print("Checking/Uploading data to MinIO...")
     upload_to_minio()
     print("Submitting Spark job...")
-    run_spark_job()
+    r = run_spark_job()
     print("Submission complete.")
-    return 0
+    return confirm_load(r)
 
 if __name__ == "__main__":
     big_data_etl_flow()

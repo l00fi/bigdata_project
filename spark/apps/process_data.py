@@ -7,7 +7,7 @@ MINIO_URL = "http://minio:9000"
 MINIO_ACCESS_KEY = "minioadmin"
 MINIO_SECRET_KEY = "minioadmin"
 BUCKET_NAME = "raw-data"
-FILE_NAME = "olist_orders_dataset.csv" # !!! ЗАМЕНИТЕ НА ИМЯ ВАШЕГО ФАЙЛА
+FILE_NAME = "olist_orders_dataset.csv"
 
 POSTGRES_URL = "jdbc:postgresql://postgres:5432/project_db"
 POSTGRES_USER = "user"
@@ -32,14 +32,10 @@ def main():
     df.show(5)
 
     # 2. Пример обработки данных (Трансформация)
-    # Замените это на свою логику анализа!
-    # Например, посчитаем среднее значение какого-то столбца
-    # 'some_numeric_column' и 'grouping_column' - замените на реальные названия
-    # processed_df = df.groupBy("grouping_column").agg(avg("some_numeric_column").alias("avg_value"))
-    processed_df = df.limit(1000) # Простой пример: берем первые 1000 строк
+    # Заменить это на свою логику анализа!
+    processed_df = df.limit(1000)
 
     print("Data processed successfully.")
-    processed_df.show(5)
 
     # 3. Запись данных в PostgreSQL (Загрузка)
     processed_df.write \
