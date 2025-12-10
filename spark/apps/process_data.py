@@ -22,7 +22,6 @@ def main():
         .config("spark.hadoop.fs.s3a.secret.key", MINIO_SECRET_KEY) \
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
-        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.2.2,org.postgresql:postgresql:42.2.23") \
         .getOrCreate()
 
     print("Spark Session created successfully.")

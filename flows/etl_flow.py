@@ -11,6 +11,7 @@ MINIO_URL = "minio:9000"
 MINIO_ACCESS_KEY = "minioadmin"
 MINIO_SECRET_KEY = "minioadmin"
 BUCKET_NAME = "raw-data"
+SPARK_MASTER_REST = "http://spark-master:6066/v1/submissions/create"
 
 # --- ЗАДАЧА 1: EXTRACT ---
 # Загружает локальные файлы в MinIO
@@ -44,59 +45,31 @@ def upload_to_minio():
 # --- ЗАДАЧA 2: TRANSFORM ---
 # Запускает Spark-джоб для обработки данных
 @task(name="Run Spark Job")
-def run_spark_job(upload_success: bool):
-    """Подключается к Spark Master и выполняет скрипт обработки."""
-    if not upload_success:
-        raise Exception("Data upload failed, aborting Spark job.")
-        
-    print("Connecting to Spark and running the job...")
-    
-    # Создаем Spark-сессию, которая подключается к нашему кластеру
-    # Имя 'spark-master' - это имя сервиса из docker-compose.yml
-    spark = SparkSession.builder \
-        .appName("ETL-from-Prefect") \
-        .master("spark://spark-master:7077") \
-        .config("spark.driver.host", "prefect-server") \
-        .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
-        .config("spark.hadoop.fs.s3a.access.key", "minioadmin") \
-        .config("spark.hadoop.fs.s3a.secret.key", "minioadmin") \
-        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
-        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
-        .getOrCreate()
+def run_spark_job():
+    import subprocess
 
-    print("Spark Session created. Running the processing logic...")
-    
-    # --- ВАЖНО: Копируем логику из process_data.py прямо сюда ---
-    # или импортируем ее, если вынесли в отдельный модуль.
-    # Для простоты, скопируем.
+def run_spark_job():
+    cmd = [
+        "docker", "exec", "spark-master",
+        "/opt/spark/bin/spark-submit",
+        "--master", "spark://spark-master:7077",
+        "--deploy-mode", "cluster",
+        "--jars", "/opt/spark/jars/hadoop-aws-3.3.2.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.262.jar,/opt/spark/jars/postgresql-42.2.23.jar",
+        "/opt/spark/jobs/process_data.py"
+    ]
 
-    # 1. Чтение данных из MinIO
-    df = spark.read.csv("s3a://raw-data/olist_orders_dataset.csv", header=True, inferSchema=True) # Пример
-    print("Data read from MinIO successfully.")
-    df.show(5)
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
-    # 2. Пример обработки данных (Трансформация)
-    processed_df = df.limit(1000) # Ваша логика обработки
-    print("Data processed successfully.")
-    processed_df.show(5)
+    print("STDOUT:", result.stdout)
+    print("STDERR:", result.stderr)
 
-    # 3. Запись данных в PostgreSQL (Загрузка)
-    processed_df.write \
-        .format("jdbc") \
-        .option("url", "jdbc:postgresql://postgres:5432/project_db") \
-        .option("dbtable", "processed_data") \
-        .option("user", "user") \
-        .option("password", "password") \
-        .option("driver", "org.postgresql.Driver") \
-        .mode("overwrite") \
-        .save()
-        
-    print("Data written to PostgreSQL successfully.")
-    
-    # Останавливаем сессию
-    spark.stop()
-    
+    result.check_returncode()
     return True
+
+
+    print("Spark submission response:", resp.text)
+    return resp.json()
+
 
 
 # --- ЗАДАЧА 3: LOAD (в нашем случае выполняется внутри Spark-джоба) ---
@@ -112,10 +85,13 @@ def confirm_load(spark_success: bool):
 # Собирает все задачи в один пайплайн
 @flow(name="Big Data ETL Flow")
 def big_data_etl_flow():
-    upload_success = upload_to_minio()
-    spark_success = run_spark_job(upload_success)
-    confirm_load(spark_success)
+    print("Submitting Spark job...")
+    r = run_spark_job()
+    print("Submission complete.")
 
-# Запуск flow для развертывания
+    # Тут где-то confirm_load
+
+    return r
+
 if __name__ == "__main__":
-    big_data_etl_flow.serve(name="my-first-deployment")
+    big_data_etl_flow()

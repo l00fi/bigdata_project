@@ -1,5 +1,5 @@
 prefect
 minio
-pyspark
+pyspark==3.5.1
 asyncpg
 psycopg2-binary
