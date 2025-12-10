@@ -39,8 +39,8 @@ services:
       - "7077:7077"
       - "6066:6066"  # <= обязательно!
     volumes:
-      - ./spark_jobs:/opt/bitnami/spark/jobs
-      - ./data:/opt/bitnami/spark/data
+      - ./spark/apps:/opt/spark/jobs
+      - ./data:/opt/spark/data
     depends_on:
       data-downloader:
         condition: service_completed_successfully
@@ -151,6 +151,7 @@ services:
     command: prefect worker start -p spark-pool
     restart: unless-stopped
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - ./flows:/opt/prefect/flows
       - ./data:/data
     environment:

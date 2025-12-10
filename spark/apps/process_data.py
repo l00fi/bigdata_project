@@ -7,7 +7,7 @@ MINIO_URL = "http://minio:9000"
 MINIO_ACCESS_KEY = "minioadmin"
 MINIO_SECRET_KEY = "minioadmin"
 BUCKET_NAME = "raw-data"
-FILE_NAME = "your_data_file.csv" # !!! ЗАМЕНИТЕ НА ИМЯ ВАШЕГО ФАЙЛА
+FILE_NAME = "olist_orders_dataset.csv" # !!! ЗАМЕНИТЕ НА ИМЯ ВАШЕГО ФАЙЛА
 
 POSTGRES_URL = "jdbc:postgresql://postgres:5432/project_db"
 POSTGRES_USER = "user"

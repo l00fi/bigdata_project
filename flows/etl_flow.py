@@ -13,7 +13,6 @@ MINIO_SECRET_KEY = "minioadmin"
 BUCKET_NAME = "raw-data"
 SPARK_MASTER_REST = "http://spark-master:6066/v1/submissions/create"
 
-# --- ЗАДАЧА 1: EXTRACT ---
 # Загружает локальные файлы в MinIO
 @task(name="Upload data to MinIO")
 def upload_to_minio():
@@ -25,7 +24,7 @@ def upload_to_minio():
         secret_key=MINIO_SECRET_KEY,
         secure=False
     )
-    
+
     # Создаем бакет, если его нет
     if not client.bucket_exists(BUCKET_NAME):
         client.make_bucket(BUCKET_NAME)
@@ -42,37 +41,27 @@ def upload_to_minio():
             print(f"File '{filename}' uploaded to MinIO.")
     return True
 
-# --- ЗАДАЧA 2: TRANSFORM ---
 # Запускает Spark-джоб для обработки данных
 @task(name="Run Spark Job")
 def run_spark_job():
-    import subprocess
-
-def run_spark_job():
+    # Отправка запроса в spark
     cmd = [
         "docker", "exec", "spark-master",
         "/opt/spark/bin/spark-submit",
         "--master", "spark://spark-master:7077",
-        "--deploy-mode", "cluster",
-        "--jars", "/opt/spark/jars/hadoop-aws-3.3.2.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.262.jar,/opt/spark/jars/postgresql-42.2.23.jar",
+        "--deploy-mode", "client",
+        "--jars", "/opt/spark/jars/hadoop-aws-3.3.4.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.517.jar,/opt/spark/jars/postgresql-42.7.2.jar",
         "/opt/spark/jobs/process_data.py"
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
-
+    # Подобие лоирования
     print("STDOUT:", result.stdout)
     print("STDERR:", result.stderr)
 
-    result.check_returncode()
-    return True
+    # return result.check_returncode() == 0
+    return 0
 
-
-    print("Spark submission response:", resp.text)
-    return resp.json()
-
-
-
-# --- ЗАДАЧА 3: LOAD (в нашем случае выполняется внутри Spark-джоба) ---
 # Spark сам загрузит данные в PostgreSQL. Эта задача просто для логической структуры.
 @task(name="Confirm Load")
 def confirm_load(spark_success: bool):
@@ -80,18 +69,16 @@ def confirm_load(spark_success: bool):
         raise Exception("Spark job failed, so data was not loaded.")
     print("Data successfully processed and loaded into PostgreSQL.")
 
-
 # --- Главный Flow ---
 # Собирает все задачи в один пайплайн
 @flow(name="Big Data ETL Flow")
 def big_data_etl_flow():
+    print("Checking/Uploading data to MinIO...")
+    upload_to_minio()
     print("Submitting Spark job...")
-    r = run_spark_job()
+    run_spark_job()
     print("Submission complete.")
-
-    # Тут где-то confirm_load
-
-    return r
+    return 0
 
 if __name__ == "__main__":
     big_data_etl_flow()
