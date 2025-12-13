@@ -44,28 +44,51 @@ def upload_to_minio():
 
     return raw_data_list
 
-# Запускает Spark-джоб для обработки данных
 @task(name="Run Spark Job")
 def run_spark_job(data_list: list):
     raw_data_json = json.dumps(data_list)
-    # Отправка запроса в spark
+    
+    print("Preparing to submit Spark job via Client Mode...")
+
+    # Путь к spark-submit внутри контейнера Prefect (мы его установили в Шаге 1)
+    spark_submit_bin = "/opt/spark/bin/spark-submit"
+    
+    # Команда запуска
     cmd = [
-        "docker", "exec", "spark-master", # <= Тут тоже костыль (всё тот же)
-        "/opt/spark/bin/spark-submit",
-        "--master", "spark://spark-master:7077",
-        "--deploy-mode", "client",
-        "--jars", "/opt/spark/jars/hadoop-aws-3.3.4.jar,/opt/spark/jars/aws-java-sdk-bundle-1.12.517.jar,/opt/spark/jars/postgresql-42.7.2.jar",
-        "/opt/spark/jobs/process_data.py",
+        spark_submit_bin,
+        "--master", "spark://spark-master:7077", # Подключение по сети к мастеру
+        "--deploy-mode", "client", # Prefect - это драйвер, Worker - исполнитель
+        "--name", "Prefect-ETL-Job",
+        # Подключаем JARs, которые мы примонтировали в /opt/spark/jars
+        "--jars", "/opt/extra-jars/hadoop-aws-3.3.4.jar,/opt/extra-jars/aws-java-sdk-bundle-1.12.517.jar,/opt/extra-jars/postgresql-42.7.2.jar",
+        # Конфиги для S3 (Важно передать их драйверу здесь, если они не в spark-defaults.conf)
+        "--conf", "spark.hadoop.fs.s3a.endpoint=http://minio:9000",
+        "--conf", "spark.hadoop.fs.s3a.access.key=minioadmin",
+        "--conf", "spark.hadoop.fs.s3a.secret.key=minioadmin",
+        "--conf", "spark.hadoop.fs.s3a.path.style.access=true",
+        "--conf", "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem",
+        # Сам скрипт
+        "/opt/spark/jobs/process_data.py", 
+        # Аргументы скрипта
         "--files", raw_data_json     
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
     
-    if result.check_returncode() == 1:
+    # Запуск
+    env = os.environ.copy()
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    
+    if result.returncode != 0:
+        print("Spark Job Failed!")
         print("STDERR:", result.stderr)
+        print("STDOUT:", result.stdout) # Иногда ошибки Spark пишет в stdout
         return False
     else:
-        print("STDOUT:", result.stdout)
+        print("Spark Job Success!")
+        # Spark в client mode пишет много логов в stdout/stderr, можно вывести часть
+        print("Output snippet:", result.stderr[-500:]) 
         return True
+
+# ... (остальной код тот же)
 
 # Spark сам загрузит данные в PostgreSQL. Эта задача просто для логической структуры.
 @task(name="Confirm Load")

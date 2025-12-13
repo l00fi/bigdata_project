@@ -72,6 +72,7 @@ services:
   # Контейнер Data-lake, в котором хранятся сырые данные
   minio:
     image: minio/minio
+    container_name: minio
     ports:
       - "9001:9001"
       - "9000:9000"
@@ -87,6 +88,7 @@ services:
   # Котейнер БД, в который загружаются обработанные данные
   postgres:
     image: postgres:13
+    container_name: postgres
     ports:
       - "5432:5432"
     environment:
@@ -105,6 +107,7 @@ services:
     build:
       context: ./prefect
       dockerfile: Dockerfile
+    container_name: prefect-migrate
     command: >
       bash -c "
         echo 'Upgrading database...' &&
@@ -128,6 +131,7 @@ services:
     build:
       context: ./prefect
       dockerfile: Dockerfile
+    container_name: prefect-server
     command: prefect server start --host 0.0.0.0
     restart: unless-stopped
     ports:
@@ -145,14 +149,28 @@ services:
     build:
       context: ./prefect
       dockerfile: Dockerfile
+    container_name: prefect-worker
     command: prefect worker start -p spark-pool
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # УБИРАЕМ: - /var/run/docker.sock:/var/run/docker.sock
+      
+      # Flow коды
       - ./flows:/opt/prefect/flows
+      
+      # Данные (чтобы видеть файлы для загрузки в MinIO)
       - ./data:/data
+      
+      # ДОБАВЛЯЕМ: Скрипты Spark (они должны лежать по тому же пути, что и в Spark контейнерах)
+      - ./spark/apps:/opt/spark/jobs
+      
+      # ДОБАВЛЯЕМ: JAR файлы (нужны драйверу для общения с S3 и Postgres)
+      - ./spark/jars:/opt/extra-jars
+      
     environment:
       PREFECT_API_URL: "http://prefect-server:4200/api"
+      # Указываем Spark, где искать python (иногда требуется)
+      PYSPARK_PYTHON: python3 
     depends_on:
       prefect-server:
         condition: service_started
@@ -161,6 +179,7 @@ services:
   # Контейнер дашборда для визуализации и аналитики
   grafana:
     image: grafana/grafana-oss:latest
+    container_name: grafana
     ports:
       - "3000:3000"
     depends_on:
