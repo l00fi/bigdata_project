@@ -6,11 +6,15 @@ import subprocess
 import json
 
 # --- Настройки ---
-MINIO_URL = "minio:9000"
-MINIO_ACCESS_KEY = "minioadmin"
-MINIO_SECRET_KEY = "minioadmin"
-BUCKET_NAME = "raw-data"
-SPARK_MASTER_REST = "http://spark-master:6066/v1/submissions/create"
+MINIO_URL = os.getenv("MINIO_ENDPOINT", "minio:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
+SPARK_MASTER_HOST = os.getenv("SPARK_MASTER_HOST", "spark-master")
+SPARK_MASTER_PORT = os.getenv("SPARK_MASTER_PORT", "7077")
+
+BUCKET_NAME = os.getenv("MINIO_BUCKET", "raw-data")
+# SPARK_MASTER_REST = "http://spark-master:6066/v1/submissions/create"
 
 # Загружает локальные файлы в MinIO
 @task(name="Upload data to MinIO")
@@ -56,19 +60,19 @@ def run_spark_job(data_list: list):
     # Команда запуска
     cmd = [
         spark_submit_bin,
-        "--master", "spark://spark-master:7077", # Подключение по сети к мастеру
+        "--master", f"spark://{SPARK_MASTER_HOST}:{SPARK_MASTER_PORT}", # Подключение по сети к мастеру
         "--deploy-mode", "client", # Prefect - это драйвер, Worker - исполнитель
         "--name", "Prefect-ETL-Job",
         # Подключаем JARs, которые мы примонтировали в /opt/spark/jars
         "--jars", "/opt/extra-jars/hadoop-aws-3.3.4.jar,/opt/extra-jars/aws-java-sdk-bundle-1.12.517.jar,/opt/extra-jars/postgresql-42.7.2.jar",
         # Конфиги для S3 (Важно передать их драйверу здесь, если они не в spark-defaults.conf)
-        "--conf", "spark.hadoop.fs.s3a.endpoint=http://minio:9000",
-        "--conf", "spark.hadoop.fs.s3a.access.key=minioadmin",
-        "--conf", "spark.hadoop.fs.s3a.secret.key=minioadmin",
+        "--conf", f"spark.hadoop.fs.s3a.endpoint=http://{MINIO_ENDPOINT}",
+        "--conf", f"spark.hadoop.fs.s3a.access.key={MINIO_ACCESS_KEY}",
+        "--conf", f"spark.hadoop.fs.s3a.secret.key={MINIO_SECRET_KEY}",
         "--conf", "spark.hadoop.fs.s3a.path.style.access=true",
         "--conf", "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem",
         # Сам скрипт
-        "/opt/spark/jobs/process_data.py", 
+        "/opt/spark/jobs/main.py", 
         # Аргументы скрипта
         "--files", raw_data_json     
     ]
@@ -87,8 +91,6 @@ def run_spark_job(data_list: list):
         # Spark в client mode пишет много логов в stdout/stderr, можно вывести часть
         print("Output snippet:", result.stderr[-500:]) 
         return True
-
-# ... (остальной код тот же)
 
 # Spark сам загрузит данные в PostgreSQL. Эта задача просто для логической структуры.
 @task(name="Confirm Load")

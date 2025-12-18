@@ -1,3 +1,5 @@
 .kaggle/
 *.csv
 *.jar
+.env
+__pycache__/
