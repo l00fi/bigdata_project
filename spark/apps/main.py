@@ -64,31 +64,6 @@ def main():
         print(f"Processing: {full_path}")
 
         processor.process(full_path)
-        # try:
-        #     df = spark.read.csv(full_path, header=True, inferSchema=True)
-        #     print("Data read from MinIO successfully.")
-
-        #     # Пример обработки данных (Трансформация)
-        #     # Заменить это на свою логику анализа!
-
-
-        #     processed_df = df.limit(1000)
-
-        #     # Запись данных в PostgreSQL (Загрузка)
-        #     table_name = file.split('.')[0] + POSTGRES_TABLE_POSTFIX
-        #     processed_df.write \
-        #         .format("jdbc") \
-        #         .option("url", POSTGRES_URL) \
-        #         .option("dbtable", table_name) \
-        #         .option("user", POSTGRES_USER) \
-        #         .option("password", POSTGRES_PASSWORD) \
-        #         .option("driver", "org.postgresql.Driver") \
-        #         .mode("overwrite") \
-        #         .save()
-
-        #     print("Data written to PostgreSQL successfully.")
-        # except:
-        #     print(f"Failed to process {file}: {e}")
 
     spark.stop()
 

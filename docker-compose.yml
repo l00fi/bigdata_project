@@ -157,25 +157,13 @@ services:
     command: prefect worker start -p spark-pool
     restart: unless-stopped
     volumes:
-      # УБИРАЕМ: - /var/run/docker.sock:/var/run/docker.sock
-      
-      # Flow коды
       - ./flows:/opt/prefect/flows
-      
-      # Данные (чтобы видеть файлы для загрузки в MinIO)
       - ./data:/data
-      
-      # ДОБАВЛЯЕМ: Скрипты Spark (они должны лежать по тому же пути, что и в Spark контейнерах)
       - ./spark/apps:/opt/spark/jobs
-      
-      # ДОБАВЛЯЕМ: JAR файлы (нужны драйверу для общения с S3 и Postgres)
       - ./spark/jars:/opt/extra-jars
-      
     environment:
       PREFECT_API_URL: "${PREFECT_API_URL}"
-      # Указываем Spark, где искать python (иногда требуется)
-      PYSPARK_PYTHON: python3 
-      # Для etl_flow.py
+      PYSPARK_PYTHON: python3
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -197,12 +185,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # 1. Пробрасываем настройки (Datasources и Providers)
       - ./grafana/provisioning:/etc/grafana/provisioning
-      # 2. Пробрасываем сами JSON дашборды
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     environment:
-      # Передаем переменные из .env внутрь контейнера, чтобы datasource.yml их увидел
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - POSTGRES_DB=${POSTGRES_DB}

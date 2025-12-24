@@ -1,116 +1,166 @@
 import os
-import traceback
-from pyspark.sql import functions as F
-from pyspark.sql.types import DecimalType, TimestampType
+from typing import Dict, Callable, Any
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.functions import col, to_timestamp, current_timestamp
 
 class DataProcessor:
-    def __init__(self, spark, db_config):
+    """
+    Класс инкапсулирует логику трансформации данных (ETL) для Olist E-commerce dataset.
+    
+    Реализует паттерн 'Стратегия' (Strategy) для выбора метода обработки 
+    в зависимости от входящего файла.
+    """
+
+    def __init__(self, spark: SparkSession, db_config: Dict[str, str]) -> None:
         """
-        :param spark: Активная SparkSession
-        :param db_config: Словарь с настройками БД (url, user, password)
+        Инициализация процессора.
+
+        :param spark: Активная сессия Spark (SparkSession).
+        :param db_config: Словарь с конфигурацией подключения к БД (url, user, password, etc.).
         """
         self.spark = spark
         self.db_config = db_config
-        
-        # Маршрутизация: Ключевое слово в имени файла -> Метод обработки
-        self.mapping = {
-            "orders": self._process_orders,
-            "items": self._process_items,
-            "customers": self._process_customers,
-            "products": self._process_products,
-            "payments": self._process_payments
-            # Добавляй сюда новые файлы по мере необходимости
-        }
 
-    def process(self, file_path):
+    def process(self, file_path: str) -> None:
         """
-        Главный метод. Определяет тип файла и запускает нужную логику.
+        Основной метод-оркестратор обработки одного файла.
+        
+        1. Читает файл из S3 (MinIO).
+        2. Определяет стратегию трансформации.
+        3. Применяет трансформации.
+        4. Записывает результат в PostgreSQL.
+
+        :param file_path: Полный S3-путь к файлу (например, 's3a://bucket/data.csv').
+        :raises Exception: Если возникает ошибка чтения или записи.
         """
-        filename = os.path.basename(file_path)
-        print(f"--- [Processor] Received file: {filename} ---")
+        filename: str = os.path.basename(file_path)
+        print(f"Processing file: {filename}")
 
         try:
-            # 1. Читаем файл (Raw Layer)
-            # inferSchema=True дорогой, но для учебного проекта удобен.
-            # В проде лучше задавать schema вручную.
-            df_raw = self.spark.read.csv(file_path, header=True, inferSchema=True)
-
-            # 2. Определяем, какой метод трансформации вызвать
-            transform_method = self._get_transform_method(filename)
+            # Чтение данных из Data Lake
+            df_raw: DataFrame = self.spark.read.csv(file_path, header=True, inferSchema=True)
             
-            if transform_method:
-                # 3. Трансформация (Silver Layer)
-                print(f"--- Applying specific logic for: {filename}")
-                df_transformed = transform_method(df_raw)
-                
-                # 4. Запись (Gold Layer)
-                # Генерируем имя таблицы из имени файла (убираем расширение и суффиксы)
-                # Например: olist_orders_dataset.csv -> orders
-                clean_name = self._get_clean_table_name(filename)
-                self._write_to_postgres(df_transformed, clean_name)
-                return True
-            else:
-                print(f"!!! No processing logic found for {filename}. Skipping.")
-                return False
-
+            # Выбор стратегии трансформации
+            # Тип transform_method: Функция, принимающая DataFrame и возвращающая DataFrame
+            transform_method: Callable[[DataFrame], DataFrame] = self._get_transform_method(filename)
+            
+            df_transformed: DataFrame = transform_method(df_raw)
+            
+            # Генерация имени таблицы назначения
+            table_name: str = self._get_clean_table_name(filename)
+            
+            # Загрузка в DWH
+            self._write_to_postgres(df_transformed, table_name)
+            print(f"Successfully processed {filename} -> table: {table_name}")
+            
         except Exception as e:
-            print(f"!!! Error processing {filename}: {e}")
-            traceback.print_exc()
-            return False
+            print(f"Error processing {filename}: {e}")
+            # Пробрасываем ошибку наверх, чтобы Prefect пометил задачу как Failed
+            raise e
 
-    def _get_transform_method(self, filename):
-        """Ищет ключевое слово в имени файла и возвращает функцию"""
-        for key, method in self.mapping.items():
-            if key in filename:
-                return method
-        return None
+    def _get_transform_method(self, filename: str) -> Callable[[DataFrame], DataFrame]:
+        """
+        Фабричный метод для выбора логики обработки на основе имени файла.
 
-    def _get_clean_table_name(self, filename):
-        """Превращает 'olist_orders_dataset.csv' в 'orders_data'"""
-        # Упрощенная логика: ищем ключевое слово из маппинга
-        for key in self.mapping.keys():
-            if key in filename:
-                return key + "_data"
-        return "unknown_data"
+        :param filename: Имя файла (например, 'olist_orders_dataset.csv').
+        :return: Функция-трансформер, принимающая DataFrame и возвращающая DataFrame.
+        """
+        if "olist_orders_dataset" in filename:
+            return self._process_orders
+        elif "olist_order_items_dataset" in filename:
+            return self._process_items
+        elif "olist_customers_dataset" in filename:
+            return self._process_customers
+        elif "olist_products_dataset" in filename:
+            return self._process_products
+        elif "olist_order_payments_dataset" in filename:
+            return self._process_payments
+        else:
+            # Fallback: Возвращаем лямбда-функцию, которая ничего не меняет (Identity)
+            print(f"Warning: No specific processor found for {filename}, using identity transformation.")
+            return lambda df: df
 
-    # ==========================================
-    # Специфичная логика для каждого файла
-    # ==========================================
+    def _get_clean_table_name(self, filename: str) -> str:
+        """
+        Генерирует имя таблицы для базы данных.
+        
+        Пример: 'olist_orders_dataset.csv' -> 'orders_data'
 
-    def _process_orders(self, df):
-        """Логика для заказов: работа с датами"""
-        return df.withColumn("order_purchase_timestamp", F.to_timestamp("order_purchase_timestamp")) \
-                 .withColumn("order_approved_at", F.to_timestamp("order_approved_at")) \
-                 .withColumn("order_delivered_carrier_date", F.to_timestamp("order_delivered_carrier_date")) \
-                 .withColumn("order_delivered_customer_date", F.to_timestamp("order_delivered_customer_date")) \
-                 .withColumn("order_estimated_delivery_date", F.to_timestamp("order_estimated_delivery_date"))
+        :param filename: Исходное имя файла.
+        :return: Очищенное имя таблицы.
+        """
+        # Удаляем префикс 'olist_' и суффикс '_dataset.csv'
+        base_name = filename.replace("olist_", "").replace("_dataset.csv", "")
+        # Добавляем постфикс из конфига (обычно '_data')
+        return f"{base_name}{self.db_config.get('table_postfix', '_data')}"
 
-    def _process_items(self, df):
-        """Логика для товаров: работа с деньгами"""
-        return df.withColumn("price", F.col("price").cast(DecimalType(10, 2))) \
-                 .withColumn("freight_value", F.col("freight_value").cast(DecimalType(10, 2))) \
-                 .withColumn("shipping_limit_date", F.to_timestamp("shipping_limit_date"))
+    def _process_orders(self, df: DataFrame) -> DataFrame:
+        """
+        Бизнес-логика для таблицы заказов (orders).
+        
+        Трансформации:
+        - Приведение строковых полей даты к типу Timestamp.
+        - Добавление технического поля 'processed_at'.
 
-    def _process_customers(self, df):
-        """Логика для клиентов: очистка строк, если нужно"""
-        # Например, приводим город к нижнему регистру
-        return df.withColumn("customer_city", F.lower(F.col("customer_city")))
+        :param df: Исходный DataFrame.
+        :return: Обработанный DataFrame.
+        """
+        return df.withColumn("order_purchase_timestamp", to_timestamp(col("order_purchase_timestamp"))) \
+                 .withColumn("processed_at", current_timestamp())
 
-    def _process_products(self, df):
-        """Логика для продуктов"""
-        # Заполняем пропуски в категориях
+    def _process_items(self, df: DataFrame) -> DataFrame:
+        """
+        Бизнес-логика для товарных позиций (items).
+        
+        Трансформации:
+        - Фильтрация ошибочных записей (цена <= 0).
+
+        :param df: Исходный DataFrame.
+        :return: Обработанный DataFrame.
+        """
+        return df.filter(col("price") > 0)
+
+    def _process_customers(self, df: DataFrame) -> DataFrame:
+        """
+        Бизнес-логика для клиентов (customers).
+        
+        Трансформации:
+        - Дедупликация по ID клиента.
+
+        :param df: Исходный DataFrame.
+        :return: Обработанный DataFrame.
+        """
+        return df.dropDuplicates(["customer_id"])
+
+    def _process_products(self, df: DataFrame) -> DataFrame:
+        """
+        Бизнес-логика для продуктов (products).
+        
+        Трансформации:
+        - Заполнение NULL значений в категории.
+
+        :param df: Исходный DataFrame.
+        :return: Обработанный DataFrame.
+        """
         return df.na.fill({"product_category_name": "unknown"})
 
-    def _process_payments(self, df):
-        """Логика для платежей"""
-        return df.withColumn("payment_value", F.col("payment_value").cast(DecimalType(10, 2)))
+    def _process_payments(self, df: DataFrame) -> DataFrame:
+        """
+        Бизнес-логика для платежей (payments).
+        
+        :param df: Исходный DataFrame.
+        :return: Обработанный DataFrame.
+        """
+        # Пока возвращаем как есть, но структура готова для расширения
+        return df
 
-    # ==========================================
-    # Общие методы
-    # ==========================================
+    def _write_to_postgres(self, df: DataFrame, table_name: str) -> None:
+        """
+        Запись DataFrame в PostgreSQL через JDBC драйвер.
 
-    def _write_to_postgres(self, df, table_name):
-        print(f"--- Writing to DB Table: {table_name} ---")
+        :param df: DataFrame для записи.
+        :param table_name: Имя целевой таблицы в БД.
+        """
         df.write \
             .format("jdbc") \
             .option("url", self.db_config['url']) \
@@ -120,4 +170,3 @@ class DataProcessor:
             .option("driver", "org.postgresql.Driver") \
             .mode("overwrite") \
             .save()
-        print(f"--- Written {df.count()} rows to {table_name} ---")
