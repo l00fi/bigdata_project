@@ -1,5 +1,15 @@
 # 🛒 Olist E-Commerce: End-to-End Big Data Pipeline
----
+<div align="center">
+
+![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Apache Spark](https://img.shields.io/badge/Apache%20Spark-3.5.1-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white)
+![Prefect](https://img.shields.io/badge/Prefect-2.0-070E2B?style=for-the-badge&logo=prefect&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![MinIO](https://img.shields.io/badge/MinIO-S3_Compatible-C72C48?style=for-the-badge&logo=minio&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-Latest-F46800?style=for-the-badge&logo=grafana&logoColor=white)
+
+</div>
 
 ## 📖 О проекте
 
@@ -142,14 +152,3 @@ docker-compose restart spark-master
 1. Убедитесь, что volume `./spark/jars` примонтирован в `/opt/extra-jars`.
 2. Проверьте, что в аргументах `spark-submit` передан параметр `--jars` с правильными путями.
 ---
-<div align="center">
-
-![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Apache Spark](https://img.shields.io/badge/Apache%20Spark-3.5.1-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white)
-![Prefect](https://img.shields.io/badge/Prefect-2.0-070E2B?style=for-the-badge&logo=prefect&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
-![MinIO](https://img.shields.io/badge/MinIO-S3_Compatible-C72C48?style=for-the-badge&logo=minio&logoColor=white)
-![Grafana](https://img.shields.io/badge/Grafana-Latest-F46800?style=for-the-badge&logo=grafana&logoColor=white)
-
-</div>
