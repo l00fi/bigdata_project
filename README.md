@@ -74,11 +74,30 @@ flowchart TD
 Создайте файл `.env` в корне проекта (можно скопировать из примера ниже) и поместите `kaggle.json` в папку `.kaggle/`.
 
 ```bash
-# Пример .env
+# --- PostgreSQL ---
 POSTGRES_USER=user
 POSTGRES_PASSWORD=password
+POSTGRES_DB=project_db
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+
+# --- MinIO ---
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=minioadmin
+MINIO_ENDPOINT=minio:9000
+MINIO_BUCKET=raw-data
+
+# --- Spark ---
+SPARK_MASTER_HOST=spark-master
+SPARK_MASTER_PORT=7077
+SPARK_MASTER_WEBUI_PORT=8080
+SPARK_MASTER_REST_PORT=6066
+# URL для отправки задач через REST API
+SPARK_MASTER_REST_URL=http://spark-master:6066/v1/submissions/create
+
+# --- Prefect ---
+# Внутренний адрес API для воркеров и UI
+PREFECT_API_URL=http://prefect-server:4200/api
 ```
 
 ### Шаг 2: Запуск контейнеров
