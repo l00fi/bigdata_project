@@ -74,6 +74,8 @@ flowchart TD
 Создайте файл `.env` в корне проекта (можно скопировать из примера ниже) и поместите `kaggle.json` в папку `.kaggle/`.
 
 ```bash
+# Пример готового .env
+
 # --- PostgreSQL ---
 POSTGRES_USER=user
 POSTGRES_PASSWORD=password
@@ -100,12 +102,20 @@ SPARK_MASTER_REST_URL=http://spark-master:6066/v1/submissions/create
 PREFECT_API_URL=http://prefect-server:4200/api
 ```
 
-### Шаг 2: Запуск контейнеров
+### Шаг 2: Загрузка JARs
+Для работы Spark с S3 и PostgreSQL необходимо скачать драйверы:
+
+```bash
+# Запустите скрипт установки
+python setup_jars.py
+```
+
+### Шаг 3: Запуск контейнеров
 ```bash
 docker-compose up -d --build
 ```
 
-### Шаг 3: Доступ к интерфейсам
+### Шаг 4: Доступ к интерфейсам
 
 | Сервис | URL | Описание |
 | :--- | :--- | :--- |
